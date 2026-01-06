@@ -40,7 +40,9 @@
 #define WVFP_TXRXDATA_SIZE         4
 
 void setup() {
-    Serial.begin(9600);
+    Serial.begin(115200);
+    Serial.println("Serial is printing things!");
+    pinMode(7,OUTPUT);
 }
 
 class FingerprintSensor {
@@ -93,6 +95,15 @@ public:
         }
         _cmdSendBuffer[6] = checksum;
         _cmdSendBuffer[7] = WVFP_CMD_TAIL;
+        Serial.println("About to sent: ");
+        Serial.print(String(_cmdSendBuffer[0],HEX) + ",");
+        Serial.print(String(_cmdSendBuffer[1],HEX) + ",");
+        Serial.print(String(_cmdSendBuffer[2],HEX) + ",");
+        Serial.print(String(_cmdSendBuffer[3],HEX) + ",");
+        Serial.print(String(_cmdSendBuffer[4],HEX) + ",");
+        Serial.print(String(_cmdSendBuffer[5],HEX) + ",");
+        Serial.print(String(_cmdSendBuffer[6],HEX) + ",");
+        Serial.print(String(_cmdSendBuffer[7],HEX) + ",");
 
         SensorSerial->write(_cmdSendBuffer, WVFP_TXRXBUFFER_SIZE);
     }
@@ -101,12 +112,14 @@ public:
     bool rxCmd(byte response[]) {
         int cnt = 0;
         while (SensorSerial->available()) {
+            Serial.println("Recieving things from the sensor");
             shiftBuffer(_cmdReceiverBuffer, WVFP_TXRXBUFFER_SIZE);
             _cmdReceiverBuffer[WVFP_TXRXBUFFER_SIZE - 1] = SensorSerial->read();
             cnt++;
 
             // stop reading if there is a correct frame
             if (_cmdReceiverBuffer[0] == WVFP_CMD_HEAD && _cmdReceiverBuffer[WVFP_TXRXBUFFER_SIZE - 1] == WVFP_CMD_TAIL) {
+                Serial.print("Command recieved");
                 break;
             }
         }
@@ -132,10 +145,14 @@ public:
     }
 
     bool txAndRxCmd(byte commands[], byte response[], uint32_t timeout) {
+
         txCmd(commands);
         unsigned long waitUntil = millis() + timeout;
         bool success = false;
-        while(!(success = rxCmd(response)) && millis() < waitUntil) {
+        Serial.println("Waiting");
+        while(!success && millis() < waitUntil) {
+            Serial.print(".");
+            success = rxCmd(response);
             delay(10);
         }
 
@@ -167,23 +184,58 @@ void splitString(String str, char delimiter, String output[20]) {
 
  HardwareSerial serial = HardwareSerial(1);
 
-FingerprintSensor sensor(Serial1,19200,1,2,4,3);
+FingerprintSensor Sensor(Serial1,19200,1,2,4,3);
+
+// Reasons it won't work
+//TODO hasn't begun
+//TODO wake pin
 
 void loop() {
 
     if (Serial.available() > 0) {
-        String input_str = Serial.readString();
+        Serial.println("SOMETHING HAS HA{P{ENDED");
+        String input_str = Serial.readStringUntil('\n');
         input_str.trim();
 
         String args[20];
         splitString(input_str,' ',args);
 
         if (args[0] == "hello") {
+            digitalWrite(7,HIGH);
+            delay(1000);
+            digitalWrite(7,LOW);
+
             Serial.println("Hello world!");
+
         } else if (args[0] == "begin") {
-            sensor.begin();
+            Sensor.begin();
+            Serial.println("Begun!");
         } else if (args[0] == "send_command") {
-            sensor.txAndRxCmd()
+            Serial.println("Received input");
+            byte commands[4];
+            for (int i = 0; i < 4; i++) {
+                commands[i] = (byte) strtol(args[i+1].c_str(), NULL, 16);
+            }
+            byte response[4];
+
+            // print command
+            Serial.print("Command:");
+            for (int i = 0; i < 4; i++) {
+                Serial.print(commands[i]);
+            }
+
+            if (Sensor.txAndRxCmd(commands, response, 1000)) {
+                Serial.print("Response:");
+                for (int i = 0; i < 4; i++) {
+                    Serial.print(" ");
+                    Serial.print(response[i], HEX);
+                }
+                Serial.println();
+            } else {
+                Serial.println("Command failed");
+            }
+        }else {
+            Serial.println("Unknown command");
         }
     }
 
