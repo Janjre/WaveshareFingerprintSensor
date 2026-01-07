@@ -62,6 +62,11 @@ public:
         RST = rst;
         Baud = baud;
         SensorSerial = &sr;
+
+        pinMode(WAKE,INPUT);
+        pinMode(RST,OUTPUT);
+
+
     }
 
     void begin () {
@@ -108,6 +113,12 @@ public:
         SensorSerial->write(_cmdSendBuffer, WVFP_TXRXBUFFER_SIZE);
     }
 
+    void setSleepMode(bool sleep) {
+        digitalWrite(RST, sleep ? LOW : HIGH);
+        if (!sleep) {
+            delay(10); // give time to wake up
+        }
+    }
 
     bool rxCmd(byte response[]) {
         int cnt = 0;
@@ -123,6 +134,7 @@ public:
                 break;
             }
         }
+
 
         if (_cmdReceiverBuffer[0] == WVFP_CMD_HEAD && _cmdReceiverBuffer[WVFP_TXRXBUFFER_SIZE - 1] == WVFP_CMD_TAIL) {
             byte checksum = 0;
@@ -144,18 +156,23 @@ public:
         return false;
     }
 
-    bool txAndRxCmd(byte commands[], byte response[], uint32_t timeout) {
+    bool txAndRxCmd(byte commands[], byte response[], uint32_t timeout) { // addded driving wake pin
 
+        setSleepMode(false);
         txCmd(commands);
         unsigned long waitUntil = millis() + timeout;
         bool success = false;
         Serial.println("Waiting");
         while(!success && millis() < waitUntil) {
             Serial.print(".");
-            success = rxCmd(response);
+            if (rxCmd(response) && response[1] == commands[1]) {
+                success = false;
+            }
+
             delay(10);
         }
 
+        setSleepMode(true);
         return success;
     }
 private:
@@ -184,11 +201,9 @@ void splitString(String str, char delimiter, String output[20]) {
 
  HardwareSerial serial = HardwareSerial(1);
 
-FingerprintSensor Sensor(Serial1,19200,1,2,4,3);
+FingerprintSensor Sensor(Serial1,19200,2,1,4,3);
 
-// Reasons it won't work
-//TODO hasn't begun
-//TODO wake pin
+
 
 void loop() {
 
@@ -234,9 +249,16 @@ void loop() {
             } else {
                 Serial.println("Command failed");
             }
-        }else {
+        } else if (args[0] == "sleep_high"){
+            digitalWrite(3,HIGH);
+        }else if (args[0] == "sleep_low") {
+            digitalWrite(3,LOW);
+        }
+        else{
             Serial.println("Unknown command");
         }
     }
+
+
 
 }
