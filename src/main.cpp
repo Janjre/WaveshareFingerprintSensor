@@ -189,7 +189,7 @@ public:
         Serial.println("Waiting");
         while(!success && millis() < waitUntil) {
             Serial.print(".");
-            if (rxCmd(response,commands[1]) && response[1] == commands[1]) {
+            if (rxCmd(response,commands[1]) && response[0] == commands[0]) {
                 success = true;
             }
 
@@ -340,6 +340,18 @@ void loop() {
         }else if (args[0] == "get_SN") {
             Serial.print("Printing model SN ...");
             Serial.println("SN" + String(Sensor.getModelSN()));
+        }else if (args[0] == "add_user"){
+            auto user_id = static_cast<uint16_t>(strtol(args[1].c_str(), nullptr, 16));
+            auto permission = static_cast<uint8_t>(strtol(args[2].c_str(), nullptr, 16));
+            Sensor.enrollUser(user_id, permission);
+        }else if (args[0] == "check") {
+            byte command [] = {0x0C,0,0,0};
+            byte response [WVFP_TXRXDATA_SIZE-1];
+            Sensor.txAndRxCmd(command,response,1000);
+
+            Serial.println("You are user " + String(uint16_t(response[1]) << 8 | uint16_t(response[2]),HEX));
+            Serial.println("You have the permission of " + String(command[3],HEX));
+
         }
         else{
             Serial.println("Unknown command");
