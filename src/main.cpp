@@ -350,7 +350,7 @@ void loop() {
             Sensor.txAndRxCmd(command,response,1000);
 
             Serial.println("You are user " + String(uint16_t(response[1]) << 8 | uint16_t(response[2]),HEX));
-            Serial.println("You have the permission of " + String(command[3],HEX));
+            Serial.println("You have the permission of " + String(response[3],HEX));
 
         }
         else{
