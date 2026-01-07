@@ -8,6 +8,10 @@
 #define WVFP_ACK_TIMEOUT           0x08
 #define WVFP_ACK_GO_OUT            0x0F     // The center of the fingerprint is out of alignment with sensor
 
+#define WVFP_ACK_USER_OCCUPIED 0x06 //The user was exist
+#define WVFP_ACK_FINGER_OCCUPIED 0x07 //The fingerprint was exist
+#define WVFP_ACK_TIMEOUT 0x08 //Time out
+
 // User information definition
 #define WVFP_ACK_ALL_USER          0x00
 #define WVFP_ACK_GUEST_USER        0x01
@@ -79,6 +83,12 @@ public:
         }
     }
 
+    void clearRxBuffer() {
+        for (uint8_t i=0; i<WVFP_TXRXBUFFER_SIZE; i++) {
+            _cmdReceiverBuffer[i] = 0x00;
+        }
+    }
+
     void shiftBuffer(byte buffer[], uint16_t bufferSize) {
         for (uint8_t i=1; i< bufferSize; i++) {
             buffer[i-1] = buffer[i];
@@ -120,23 +130,37 @@ public:
         }
     }
 
-    bool rxCmd(byte response[]) {
+    bool rxCmd(byte response[], byte command) {
         int cnt = 0;
+        bool success = false;
         while (SensorSerial->available()) {
             Serial.println("Recieving things from the sensor");
             shiftBuffer(_cmdReceiverBuffer, WVFP_TXRXBUFFER_SIZE);
             _cmdReceiverBuffer[WVFP_TXRXBUFFER_SIZE - 1] = SensorSerial->read();
             cnt++;
 
+
+
             // stop reading if there is a correct frame
-            if (_cmdReceiverBuffer[0] == WVFP_CMD_HEAD && _cmdReceiverBuffer[WVFP_TXRXBUFFER_SIZE - 1] == WVFP_CMD_TAIL) {
-                Serial.print("Command recieved");
+            if (_cmdReceiverBuffer[0] == WVFP_CMD_HEAD && _cmdReceiverBuffer[WVFP_TXRXBUFFER_SIZE - 1] == WVFP_CMD_TAIL){// && _cmdReceiverBuffer[1] == command) {
+
+               Serial.print("Command recieved");
+                success=true;
                 break;
             }
         }
 
+        Serial.println("Printing command recieve buffer 0:" + String(_cmdReceiverBuffer[0],HEX));
+        Serial.println("Printing command recieve buffer 1:" + String(_cmdReceiverBuffer[1],HEX));
+        Serial.println("Printing command recieve buffer 2:" + String(_cmdReceiverBuffer[2],HEX));
+        Serial.println("Printing command recieve buffer 3:" + String(_cmdReceiverBuffer[3],HEX));
+        Serial.println("Printing command recieve buffer 4:" + String(_cmdReceiverBuffer[4],HEX));
+        Serial.println("Printing command recieve buffer 5:" + String(_cmdReceiverBuffer[5],HEX));
+        Serial.println("Printing command recieve buffer 6:" + String(_cmdReceiverBuffer[6],HEX));
+        Serial.println("Printing command recieve buffer 7:" + String(_cmdReceiverBuffer[7],HEX));
 
-        if (_cmdReceiverBuffer[0] == WVFP_CMD_HEAD && _cmdReceiverBuffer[WVFP_TXRXBUFFER_SIZE - 1] == WVFP_CMD_TAIL) {
+
+        if (_cmdReceiverBuffer[0] == WVFP_CMD_HEAD && _cmdReceiverBuffer[WVFP_TXRXBUFFER_SIZE - 1] == WVFP_CMD_TAIL && success) {
             byte checksum = 0;
             for (uint8_t i = 1; i<6; i++) {
                 checksum ^= _cmdReceiverBuffer[i];
@@ -165,16 +189,76 @@ public:
         Serial.println("Waiting");
         while(!success && millis() < waitUntil) {
             Serial.print(".");
-            if (rxCmd(response) && response[1] == commands[1]) {
-                success = false;
+            if (rxCmd(response,commands[1]) && response[1] == commands[1]) {
+                success = true;
             }
 
             delay(10);
         }
 
+        clearRxBuffer();
         setSleepMode(true);
         return success;
     }
+
+    unsigned long getModelSN () {
+        byte send[] = {0x2A,0,0,0};
+        byte recieve[WVFP_TXRXBUFFER_SIZE-1];
+        txAndRxCmd(send,recieve,1000);
+        unsigned long combined = 0;
+        combined = (unsigned long)recieve[1] << 16 | (unsigned long)recieve[2] << 8 |recieve[3];
+        Serial.print("resp:");
+        Serial.println(recieve[1]);
+        Serial.println(recieve[2]);
+        Serial.println(recieve[3]);
+
+
+        return combined;
+    }
+
+    bool enrollUser (uint16_t id,byte permission) {
+
+        for (int step = 1; step <= 3; step++) {
+            Serial.println("Step "+String(step));
+            byte response[WVFP_TXRXBUFFER_SIZE-1];
+            byte command[] = {(byte)step, 0, (byte)(id & 0xff00 >> 8),(byte)(id & 0x00ff),permission};
+
+            if (txAndRxCmd(command,response,1000)) {
+                switch (response[4]) {
+                    case WVFP_ACK_SUCCESS:
+                        Serial.println("Success");
+                        break;
+                    case WVFP_ACK_FULL:
+                        Serial.println("Error: database full");
+                        return false;
+                    case WVFP_ACK_FAIL:
+                        Serial.println("Error");
+                        return false;
+                    case WVFP_ACK_USER_OCCUPIED:
+                        Serial.println("Already registered user");
+                        return false;
+                    case WVFP_ACK_FINGER_OCCUPIED:
+                        Serial.println("Already registered finger");
+                        return false;
+
+                }
+
+            }else {
+                Serial.println("Failed at step 1");
+                return false;
+            }
+        }
+
+        Serial.println("Step2");
+        Serial.println("Step2");
+        //wait for things
+        Serial.println("Step3");
+        //wait for things
+
+        return false;
+    }
+
+
 private:
     byte _cmdSendBuffer[WVFP_TXRXBUFFER_SIZE]; // Senden-Buffer
     byte _cmdReceiverBuffer[WVFP_TXRXBUFFER_SIZE]; // Empfangen-Buffer
@@ -253,6 +337,9 @@ void loop() {
             digitalWrite(3,HIGH);
         }else if (args[0] == "sleep_low") {
             digitalWrite(3,LOW);
+        }else if (args[0] == "get_SN") {
+            Serial.print("Printing model SN ...");
+            Serial.println("SN" + String(Sensor.getModelSN()));
         }
         else{
             Serial.println("Unknown command");
