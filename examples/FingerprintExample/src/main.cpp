@@ -3,7 +3,6 @@
 
 void setup() {
     Serial.begin(115200);
-    Serial.println("Serial is printing things!");
     pinMode(7,OUTPUT);
 }
 
@@ -33,7 +32,6 @@ FingerprintSensor Sensor(Serial1,19200,2,1,4,3); // 2 = RX, 1 = TX, 4 = WAKE, 3 
 void loop() {
 
     if (Serial.available() > 0) {
-        Serial.println("SOMETHING HAS HA{P{ENDED");
         String input_str = Serial.readStringUntil('\n');
         input_str.trim();
 
