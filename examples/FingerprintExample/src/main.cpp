@@ -1,9 +1,13 @@
 #include <Arduino.h>
 #include <FingerprintSensor.h>
 
-void setup() {
+FingerprintSensor Sensor(Serial1,19200,2,1,4,3); // 2 = RX, 1 = TX, 4 = WAKE, 3 = RST
+
+void setup (){
     Serial.begin(115200);
     pinMode(7,OUTPUT);
+    Sensor.DebugPrints = true;
+
 }
 
 void splitString(String str, char delimiter, String output[20]) {
@@ -25,9 +29,7 @@ void splitString(String str, char delimiter, String output[20]) {
     }
 }
 
-HardwareSerial serial = HardwareSerial(1);
 
-FingerprintSensor Sensor(Serial1,19200,2,1,4,3); // 2 = RX, 1 = TX, 4 = WAKE, 3 = RST
 
 void loop() {
 

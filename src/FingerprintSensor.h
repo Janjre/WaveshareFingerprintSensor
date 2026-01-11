@@ -55,6 +55,7 @@
 
 class FingerprintSensor {
 public:
+    bool DebugPrints = false;
     FingerprintSensor(
         HardwareSerial &sr,
         long baud,

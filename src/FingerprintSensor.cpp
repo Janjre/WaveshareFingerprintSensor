@@ -41,6 +41,7 @@ void FingerprintSensor::shiftBuffer(byte buffer[], uint16_t bufferSize) {
 void FingerprintSensor::txCmd(byte commands[]) {
     clearTxBuffer();
     _cmdSendBuffer[0] = WVFP_CMD_HEAD;
+    _cmdSendBuffer[5] = 0;
 
     for (uint8_t i = 0; i < 4; i++) {
         _cmdSendBuffer[1 + i] = commands[i];
@@ -112,19 +113,44 @@ unsigned long FingerprintSensor::getModelSN() {
             (unsigned long)resp[3];
 }
 
-bool FingerprintSensor::enrollUser(uint16_t id, byte permission) {
-    for (byte step = 1; step <= 3; step++) {
-        byte cmd[] = {
-            step,
-            0,
-            (byte)(id >> 8),
-            (byte)(id & 0xFF),
-            permission
-        };
+bool FingerprintSensor::enrollUser (uint16_t id,byte permission) {
 
-        byte resp[WVFP_TXRXDATA_SIZE];
-        if (!txAndRxCmd(cmd, resp, 1000)) return false;
-        if (resp[3] != WVFP_ACK_SUCCESS) return false;
+    for (int step = 1; step <= 3; step++) {
+        if (DebugPrints) {
+            Serial.println("Step "+String(step));
+        }
+
+        byte response[WVFP_TXRXBUFFER_SIZE-1];
+        byte command[] = {(byte)step, 0, (byte)(id & 0xff00 >> 8),(byte)(id & 0x00ff),permission};
+
+        if (txAndRxCmd(command,response,1000)) {
+            switch (response[4]) {
+                case WVFP_ACK_SUCCESS:
+                    if (DebugPrints) {
+                        Serial.println("Success");
+                    }
+                    break;
+                case WVFP_ACK_FULL:
+                    Serial.println("Error: database full");
+                    return false;
+                case WVFP_ACK_FAIL:
+                    Serial.println("Error");
+                    return false;
+                case WVFP_ACK_USER_OCCUPIED:
+                    Serial.println("Already registered user");
+                    return false;
+                case WVFP_ACK_FINGER_OCCUPIED:
+                    Serial.println("Already registered finger");
+                    return false;
+
+            }
+
+        }else {
+            Serial.println("Failed at step 1");
+            return false;
+        }
     }
-    return true;
+
+
+    return false;
 }
